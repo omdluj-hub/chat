@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>실시간 1:1 고객상담</title>
+  <title>블로그 마케팅 실시간 상담</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -44,8 +44,7 @@
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             상담원 실시간 대기 중
           </div>
-          <h1 class="text-2xl font-bold text-slate-900 tracking-tight">1:1 실시간 맞춤 상담</h1>
-          <p class="text-sm text-slate-500 mt-1">간단한 정보 입력 후 전문 상담원과 바로 연결됩니다.</p>
+          <h1 class="text-2xl font-bold text-slate-900 tracking-tight">블로그 마케팅 상담</h1>
         </div>
 
         <!-- Form Card -->
@@ -81,7 +80,10 @@
                 class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
               >
             </div>
-            <p class="text-[11px] text-slate-400 mt-1 pl-1">연락처는 상담 응대 및 안내 용도로만 안전하게 활용됩니다.</p>
+            <div class="mt-2 p-2.5 bg-blue-50/80 rounded-xl border border-blue-100 flex items-start gap-2 text-[11px] text-blue-700 leading-relaxed">
+              <i data-lucide="info" class="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5"></i>
+              <span>기존에 상담을 진행하셨던 휴대폰 번호를 입력하시면 이전 대화창으로 자동 연결됩니다.</span>
+            </div>
           </div>
 
           <button 
@@ -97,8 +99,8 @@
 
       <!-- Footer Info -->
       <div class="text-center mt-6 text-xs text-slate-400">
-        <p>평일 09:00 ~ 18:00 (점심시간 12:00 ~ 13:00)</p>
-        <p class="mt-0.5">상담 대기 시간은 평균 1분 이내입니다.</p>
+        <p>평일 10:30 ~ 20:00 (점심시간 13:00 ~ 14:00)</p>
+        <p class="mt-0.5">상담 대기시간은 평균 3분 이내입니다.</p>
       </div>
     </div>
 
@@ -116,7 +118,7 @@
           </div>
           <div>
             <div class="flex items-center gap-1.5">
-              <h2 class="font-bold text-sm text-slate-900">고객상담 지원팀</h2>
+              <h2 class="font-bold text-sm text-slate-900">블로그 마케팅 상담팀</h2>
               <span id="chatRoomStatusBadge" class="text-[10px] font-medium bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">상담중</span>
             </div>
             <p class="text-[11px] text-slate-400 flex items-center gap-1">
@@ -165,20 +167,6 @@
           <span class="w-1.5 h-1.5 rounded-full bg-slate-400 dot2"></span>
           <span class="w-1.5 h-1.5 rounded-full bg-slate-400 dot3"></span>
         </div>
-      </div>
-
-      <!-- Quick Action Chips -->
-      <div id="quickChips" class="px-4 py-2 bg-white/70 backdrop-blur-xs border-t border-slate-100 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs">
-        <span class="text-slate-400 whitespace-nowrap text-[11px] mr-1">빠른 문의:</span>
-        <button class="quick-chip whitespace-nowrap bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 px-2.5 py-1 rounded-full border border-slate-200 transition">
-          📞 전화 상담 요청
-        </button>
-        <button class="quick-chip whitespace-nowrap bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 px-2.5 py-1 rounded-full border border-slate-200 transition">
-          💰 견적 및 비용 문의
-        </button>
-        <button class="quick-chip whitespace-nowrap bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 px-2.5 py-1 rounded-full border border-slate-200 transition">
-          ⏱️ 서비스 이용 방법
-        </button>
       </div>
 
       <!-- Message Input Bar -->
