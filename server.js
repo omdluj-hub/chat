@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const crypto = require('crypto');
 const { Server } = require('socket.io');
 const db = require('./db');
 
@@ -14,11 +15,61 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'gnrnal1075';
+
+// Set of authenticated admin tokens
+const validAdminTokens = new Set();
+
+function checkAdminToken(token) {
+  return Boolean(token && validAdminTokens.has(token));
+}
+
+function adminAuthMiddleware(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = (authHeader && authHeader.replace(/^Bearer\s+/i, '').trim()) || req.query.token;
+  if (!checkAdminToken(token)) {
+    return res.status(401).json({ error: '관리자 인증이 필요합니다. 로그인해주세요.' });
+  }
+  req.adminToken = token;
+  next();
+}
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ==================== AUTH API ====================
+
+/**
+ * Admin Login
+ */
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  if (password === ADMIN_PASSWORD) {
+    const token = crypto.randomBytes(32).toString('hex');
+    validAdminTokens.add(token);
+    return res.json({ success: true, token });
+  }
+  return res.status(401).json({ error: '비밀번호가 올바르지 않습니다.' });
+});
+
+/**
+ * Verify Admin Token
+ */
+app.get('/api/admin/verify', adminAuthMiddleware, (req, res) => {
+  res.json({ valid: true });
+});
+
+/**
+ * Admin Logout
+ */
+app.post('/api/admin/logout', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = (authHeader && authHeader.replace(/^Bearer\s+/i, '').trim()) || req.body.token;
+  if (token) validAdminTokens.delete(token);
+  res.json({ success: true });
+});
 
 // ==================== REST API ====================
 
@@ -116,7 +167,7 @@ app.get('/api/rooms/:id', (req, res) => {
 /**
  * Admin: Get all rooms list with unread counts
  */
-app.get('/api/admin/rooms', (req, res) => {
+app.get('/api/admin/rooms', adminAuthMiddleware, (req, res) => {
   try {
     const { status, search } = req.query;
     const rooms = db.getAllRooms(status, search);
@@ -130,7 +181,7 @@ app.get('/api/admin/rooms', (req, res) => {
 /**
  * Admin: Update room status (active / closed)
  */
-app.patch('/api/admin/rooms/:id/status', (req, res) => {
+app.patch('/api/admin/rooms/:id/status', adminAuthMiddleware, (req, res) => {
   try {
     const { status } = req.body;
     if (!['active', 'closed'].includes(status)) {
@@ -163,7 +214,7 @@ app.patch('/api/admin/rooms/:id/status', (req, res) => {
 /**
  * Admin: Update room notes
  */
-app.patch('/api/admin/rooms/:id/notes', (req, res) => {
+app.patch('/api/admin/rooms/:id/notes', adminAuthMiddleware, (req, res) => {
   try {
     const { notes } = req.body;
     const success = db.updateRoomNotes(req.params.id, notes || '');
@@ -180,7 +231,7 @@ app.patch('/api/admin/rooms/:id/notes', (req, res) => {
 /**
  * Admin: Export customer list as CSV (UTF-8 with BOM for Excel)
  */
-app.get('/api/admin/export', (req, res) => {
+app.get('/api/admin/export', adminAuthMiddleware, (req, res) => {
   try {
     const data = db.getExportData();
     if (!data || data.length === 0) {
@@ -228,7 +279,12 @@ app.get('/c/:roomId', (req, res) => {
 
 io.on('connection', (socket) => {
   // Join a specific chat room
-  socket.on('join_room', ({ roomId, role, userName }) => {
+  socket.on('join_room', ({ roomId, role, userName, token }) => {
+    // If joining as admin, verify admin token
+    if (role === 'admin' && !checkAdminToken(token)) {
+      return socket.emit('auth_error', { message: '관리자 인증이 필요합니다.' });
+    }
+
     if (socket.currentChatRoomId && socket.currentChatRoomId !== roomId) {
       socket.leave(socket.currentChatRoomId);
     }
@@ -253,8 +309,12 @@ io.on('connection', (socket) => {
   });
 
   // Admin subscribes to global admin channel
-  socket.on('join_admin_channel', () => {
-    socket.join('admin_channel');
+  socket.on('join_admin_channel', ({ token } = {}) => {
+    if (checkAdminToken(token)) {
+      socket.join('admin_channel');
+    } else {
+      socket.emit('auth_error', { message: '관리자 인증이 필요합니다.' });
+    }
   });
 
   // Send message

@@ -7,8 +7,16 @@ let filterStatus = 'active'; // 'all', 'active', 'closed'
 let searchQuery = '';
 let soundEnabled = true;
 let desktopNotiEnabled = false;
+let adminToken = localStorage.getItem('admin_token') || '';
 
 // DOM Elements
+const loginModal = document.getElementById('loginModal');
+const adminLoginForm = document.getElementById('adminLoginForm');
+const adminPasswordInput = document.getElementById('adminPasswordInput');
+const loginErrorMsg = document.getElementById('loginErrorMsg');
+const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+
 const roomListContainer = document.getElementById('roomListContainer');
 const roomSearchInput = document.getElementById('roomSearchInput');
 const filterTabs = document.querySelectorAll('.filter-tab');
@@ -103,19 +111,125 @@ function sendDesktopNotification(title, body) {
   } catch (err) {}
 }
 
+// --- Admin Authentication ---
+async function verifyAuth() {
+  if (!adminToken) {
+    showLoginModal();
+    return false;
+  }
+  try {
+    const res = await fetch('/api/admin/verify', {
+      headers: { 'Authorization': `Bearer ${adminToken}` }
+    });
+    if (res.ok) {
+      hideLoginModal();
+      return true;
+    }
+  } catch (e) {}
+  showLoginModal();
+  return false;
+}
+
+function showLoginModal() {
+  if (loginModal) loginModal.classList.remove('hidden');
+  if (adminPasswordInput) {
+    adminPasswordInput.value = '';
+    setTimeout(() => adminPasswordInput.focus(), 150);
+  }
+  if (loginErrorMsg) loginErrorMsg.classList.add('hidden');
+}
+
+function hideLoginModal() {
+  if (loginModal) loginModal.classList.add('hidden');
+  updateExportLink();
+}
+
+function updateExportLink() {
+  const exportLink = document.querySelector('a[href^="/api/admin/export"]');
+  if (exportLink && adminToken) {
+    exportLink.href = `/api/admin/export?token=${encodeURIComponent(adminToken)}`;
+  }
+}
+
+// Login form submit
+if (adminLoginForm) {
+  adminLoginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const password = adminPasswordInput.value.trim();
+    if (!password) return;
+
+    loginSubmitBtn.disabled = true;
+    loginSubmitBtn.innerHTML = '<span>인증 확인 중...</span>';
+    loginErrorMsg.classList.add('hidden');
+
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || '비밀번호가 올바르지 않습니다.');
+      }
+
+      adminToken = data.token;
+      localStorage.setItem('admin_token', adminToken);
+      hideLoginModal();
+
+      initSocket();
+      loadRooms();
+      showToast('관리자 인증이 완료되었습니다.');
+    } catch (err) {
+      loginErrorMsg.textContent = err.message;
+      loginErrorMsg.classList.remove('hidden');
+    } finally {
+      loginSubmitBtn.disabled = false;
+      loginSubmitBtn.innerHTML = '<span>관리자 로그인</span><i data-lucide="arrow-right" class="w-4 h-4"></i>';
+      if (window.lucide) lucide.createIcons();
+    }
+  });
+}
+
+// Logout button
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', async () => {
+    if (confirm('관리자 콘솔에서 로그아웃하시겠습니까?')) {
+      try {
+        await fetch('/api/admin/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+      } catch (e) {}
+      localStorage.removeItem('admin_token');
+      adminToken = '';
+      if (socket) socket.disconnect();
+      showLoginModal();
+    }
+  });
+}
+
 // --- Initialize Socket.IO for Admin ---
 function initSocket() {
+  if (socket) socket.disconnect();
   socket = io();
 
   socket.on('connect', () => {
-    socket.emit('join_admin_channel');
+    socket.emit('join_admin_channel', { token: adminToken });
     if (selectedRoomId) {
       socket.emit('join_room', {
         roomId: selectedRoomId,
         role: 'admin',
-        userName: '관리자'
+        userName: '관리자',
+        token: adminToken
       });
     }
+  });
+
+  socket.on('auth_error', ({ message }) => {
+    showToast(message || '인증이 만료되었습니다.');
+    showLoginModal();
   });
 
   // New room created by customer
@@ -182,17 +296,26 @@ function initSocket() {
 
 // --- Fetch & Render Rooms ---
 async function loadRooms() {
+  if (!adminToken) return;
   try {
     const params = new URLSearchParams();
     if (filterStatus) params.append('status', filterStatus);
     if (searchQuery) params.append('search', searchQuery);
 
-    const res = await fetch(`/api/admin/rooms?${params.toString()}`);
+    const res = await fetch(`/api/admin/rooms?${params.toString()}`, {
+      headers: { 'Authorization': `Bearer ${adminToken}` }
+    });
+    if (res.status === 401) {
+      showLoginModal();
+      return;
+    }
     if (!res.ok) throw new Error('목록 조회 실패');
     rooms = await res.json();
 
     // Also fetch counts for all
-    const allRes = await fetch(`/api/admin/rooms?status=all`);
+    const allRes = await fetch(`/api/admin/rooms?status=all`, {
+      headers: { 'Authorization': `Bearer ${adminToken}` }
+    });
     if (allRes.ok) {
       const allRooms = await allRes.json();
       countAll.textContent = allRooms.length;
@@ -276,7 +399,8 @@ async function selectRoom(roomId) {
     socket.emit('join_room', {
       roomId: selectedRoomData.id,
       role: 'admin',
-      userName: '관리자'
+      userName: '관리자',
+      token: adminToken
     });
 
     // Populate header & metadata
@@ -470,7 +594,10 @@ toggleStatusBtn.addEventListener('click', async () => {
   try {
     const res = await fetch(`/api/admin/rooms/${selectedRoomId}/status`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
       body: JSON.stringify({ status: nextStatus })
     });
     if (!res.ok) throw new Error('상태 변경 실패');
@@ -495,7 +622,10 @@ saveNotesBtn.addEventListener('click', async () => {
 
     const res = await fetch(`/api/admin/rooms/${selectedRoomId}/notes`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${adminToken}`
+      },
       body: JSON.stringify({ notes })
     });
     if (!res.ok) throw new Error('메모 저장 실패');
@@ -619,7 +749,10 @@ function escapeHtml(str) {
 }
 
 // --- Initial Page Load ---
-window.addEventListener('DOMContentLoaded', () => {
-  initSocket();
-  loadRooms();
+window.addEventListener('DOMContentLoaded', async () => {
+  const isAuthed = await verifyAuth();
+  if (isAuthed) {
+    initSocket();
+    loadRooms();
+  }
 });
